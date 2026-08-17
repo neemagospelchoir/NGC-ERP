@@ -1,0 +1,131 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main, develop]
+  push:
+    branches: [main, develop]
+
+jobs:
+  migration-check:
+    name: Database migrations apply cleanly
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: ngc_erp
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Apply migrations
+        env:
+          DATABASE_URL: postgres://postgres:postgres@localhost:5432/ngc_erp
+        run: bash scripts/db-migrate.sh
+      - name: Apply reference seed data
+        env:
+          DATABASE_URL: postgres://postgres:postgres@localhost:5432/ngc_erp
+        run: bash scripts/db-seed.sh reference
+      - name: Database smoke tests (Phase 14.2 — supabase/tests/smoke.sql)
+        env:
+          DATABASE_URL: postgres://postgres:postgres@localhost:5432/ngc_erp
+        # Re-applies migrations + seed against a clean copy of this same
+        # service database rather than reusing the one just seeded above —
+        # smoke.sql's fixture inserts are meant to run against a fresh
+        # database, and re-running scripts/db-migrate.sh/db-seed.sh here is
+        # cheap and keeps this step self-contained/independently rerunnable.
+        run: |
+          psql -v ON_ERROR_STOP=1 -q "$DATABASE_URL" -c "drop schema public cascade; drop schema auth cascade; create schema public; create schema auth;"
+          bash scripts/db-smoke-test.sh
+
+  lint-typecheck-build:
+    name: Lint, typecheck, build
+    runs-on: ubuntu-latest
+    needs: migration-check
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: "pnpm"
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Lint
+        run: pnpm lint
+      - name: Typecheck
+        run: pnpm typecheck
+      - name: Build
+        run: pnpm build
+      - name: Unit tests (packages/services — auth, etc.; no network/DB required)
+        run: pnpm --filter @ngc/services test
+      - name: Unit tests (apps/mobile — theme tokens, chunked SecureStore adapter; no device/emulator required)
+        run: pnpm --filter @ngc/mobile test
+
+  e2e:
+    name: End-to-end (Playwright, apps/web — 77 specs against a real built server + mock Auth/PostgREST)
+    runs-on: ubuntu-latest
+    needs: lint-typecheck-build
+    # apps/web/e2e's Playwright suite (docs/AUTHENTICATION.md §4/§7) runs a
+    # real `next build`+`next start` server plus a real second Node process
+    # (e2e/mock-gotrue-server.mjs) standing in for Supabase Auth/PostgREST —
+    # no Postgres/RLS involved (that's covered by migration-check's own new
+    # smoke-test step), so this job does not need the postgres service and
+    # can run independent of migration-check. This was previously a
+    # documented-but-unwired follow-up (see this job's own git history) —
+    # the one missing piece was `playwright install --with-deps`, since the
+    # local dev sandbox this suite was built in pins a pre-installed
+    # Chromium binary that a GitHub Actions runner does not have
+    # (playwright.config.ts's own SANDBOX_CHROMIUM_PATH override only
+    # applies when that exact path exists, so it's a no-op here and
+    # Playwright's own default browser resolution takes over).
+    env:
+      NEXT_PUBLIC_SUPABASE_URL: http://127.0.0.1:54321
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: test-anon-key
+      NEXT_PUBLIC_APP_URL: http://127.0.0.1:3100
+      SUPABASE_SERVICE_ROLE_KEY: test-service-role-key
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: "pnpm"
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Install Playwright's Chromium + OS dependencies
+        working-directory: apps/web
+        run: npx playwright install --with-deps chromium
+      - name: Build apps/web and its workspace dependencies
+        # Scoped to @ngc/web's own dependency graph (not the full `pnpm
+        # build`) so this job doesn't also need apps/mobile's Expo build
+        # env vars (EXPO_PUBLIC_SUPABASE_URL/ANON_KEY) it has no reason to
+        # set — see turbo's own dependency-aware `--filter=<pkg>...`.
+        run: npx turbo run build --filter=@ngc/web...
+      - name: Run Playwright e2e suite
+        working-directory: apps/web
+        run: npx playwright test
+
+  security-review-checklist:
+    name: Security/authorization review checklist (manual gate)
+    runs-on: ubuntu-latest
+    needs: migration-check
+    steps:
+      - name: Reminder
+        run: |
+          echo "Per the Development Control Rule (spec S73), a human reviewer must confirm before merge:"
+          echo "  - No new organization-specific rule was hardcoded (should be in system_settings/lookup_values/workflow_definitions)"
+          echo "  - Every new table with member-sensitive or confidential data has RLS enabled AND has explicit policies"
+          echo "  - No public/anon policy exposes confidential categories (discipline, financial payment details)"
+          echo "  - No secrets were committed"

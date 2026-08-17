@@ -1,0 +1,12 @@
+{
+  "name": "@ngc/notifications",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Placeholder — implemented in a later phase per ARCHITECTURE.md S3/S19. Exists now only so the pnpm workspace resolves cleanly.",
+  "main": "index.ts",
+  "scripts": {
+    "typecheck": "echo 'no source yet' && exit 0",
+    "lint": "echo 'no source yet' && exit 0",
+    "build": "echo 'no source yet' && exit 0"
+  }
+}

@@ -1,0 +1,38 @@
+-- ============================================================================
+-- 0025_view_security_invoker.sql
+-- Security fix (Phase 7.3 review finding, high severity): every plain
+-- `create view` in this schema (0006, 0014, 0017) was created without
+-- `security_invoker`. Postgres views default to running with the VIEW
+-- OWNER's privileges, not the querying role's — meaning RLS on the
+-- underlying base tables (attendance, members, contribution_records,
+-- votes, ...) is silently bypassed for anyone who can `select` from the
+-- view, regardless of what RLS would otherwise permit them to see through
+-- the base tables directly. This is the opposite of what every doc
+-- comment in this codebase up to this point assumed.
+--
+-- Concretely: `member_attendance_summary` is read directly by
+-- `getMemberAttendanceSummary()` and rendered on every Member detail page
+-- unconditionally. Without this fix, a viewer who can load a member's
+-- profile at all (e.g. via `members_select_scoped`'s family-scope grant,
+-- which has nothing to do with attendance) could see that member's exact
+-- attendance percentage and counts even with zero attendance-record
+-- visibility of their own (no `attendance.records.read_all`, no
+-- overlapping department scope) — a real data leak, not just an
+-- availability quirk.
+--
+-- `security_invoker = true` (available since Postgres 15) makes the view
+-- evaluate with the CALLING role's privileges instead, so the same RLS
+-- policies that gate the base tables (`attendance_select_scoped`,
+-- `members_select_scoped`, `contribution_records`'s policies, `votes`'s
+-- policies) are enforced exactly as if the query had been written against
+-- those tables directly.
+--
+-- Fixing all three existing views for consistency, not just the one this
+-- review happened to catch — the same silent-bypass bug is latent in
+-- `contribution_campaign_summary` (0014) and `agenda_results` (0017) even
+-- though neither has application code reading it yet (Finance/Governance
+-- UI phases haven't been built). Leaving those unfixed would just
+-- reproduce this exact finding the day someone builds on top of them.
+alter view public.member_attendance_summary set (security_invoker = true);
+alter view public.contribution_campaign_summary set (security_invoker = true);
+alter view public.agenda_results set (security_invoker = true);

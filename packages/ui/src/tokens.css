@@ -1,0 +1,153 @@
+/**
+ * NGC ERP design tokens — see docs/DESIGN_SYSTEM.md for the rationale behind
+ * every value here. Brand tokens (§3) are a placeholder pending real NGC
+ * brand assets (documented as an open flag, same as PRD.md §14); data-viz
+ * tokens (§4) are the dataviz skill's validated reference palette, unchanged.
+ *
+ * Every component in this package consumes these BY ROLE via Tailwind theme
+ * keys (bg-brand-700, text-status-critical, …) — never a raw hex — so a
+ * future rebrand is a one-file change here, not a find-and-replace across
+ * components.
+ *
+ * Each color is defined TWICE on purpose:
+ *   --token:      a plain hex, for anywhere plain CSS wants it directly.
+ *   --token-rgb:  the same color as an "R G B" channel triplet (no commas),
+ *                 consumed by tailwind-preset.cjs as `rgb(var(--token-rgb) / <alpha-value>)`.
+ * The `-rgb` form is what makes Tailwind's opacity modifier (e.g. `bg-status-good/10`)
+ * actually work — a color value that's just a hex string (or `var(--x)`
+ * pointing at one) cannot have Tailwind's `<alpha-value>` substituted into
+ * it, so `/10` silently compiles to nothing. This was caught by actually
+ * building and inspecting the compiled CSS during Phase 5, not by reading
+ * the Tailwind docs — see DESIGN_SYSTEM.md's validation notes.
+ */
+
+:root {
+  color-scheme: light;
+
+  /* --- Brand: Institutional Navy (primary) --- */
+  --brand-primary-50: #eef3f8;       --brand-primary-50-rgb: 238 243 248;
+  --brand-primary-100: #d6e3ef;      --brand-primary-100-rgb: 214 227 239;
+  --brand-primary-200: #aec7df;      --brand-primary-200-rgb: 174 199 223;
+  --brand-primary-300: #7fa6cb;      --brand-primary-300-rgb: 127 166 203;
+  --brand-primary-400: #4c80af;      --brand-primary-400-rgb: 76 128 175;
+  --brand-primary-500: #2b6294;      --brand-primary-500-rgb: 43 98 148;
+  --brand-primary-600: #1f4c77;      --brand-primary-600-rgb: 31 76 119;
+  --brand-primary-700: #17395a;      --brand-primary-700-rgb: 23 57 90;
+  --brand-primary-800: #102840;      --brand-primary-800-rgb: 16 40 64;
+  --brand-primary-900: #0a1a2c;      --brand-primary-900-rgb: 10 26 44;
+
+  /* --- Brand: Gold (accent — used sparingly, never as status or primary fill) --- */
+  --brand-accent-100: #f5e1b8;       --brand-accent-100-rgb: 245 225 184;
+  --brand-accent-400: #dc9f30;       --brand-accent-400-rgb: 220 159 48;
+  --brand-accent-500: #c9871f;       --brand-accent-500-rgb: 201 135 31;
+  --brand-accent-700: #7f4f10;       --brand-accent-700-rgb: 127 79 16;
+
+  /* --- Chrome / ink / surface (shared with chart chrome) --- */
+  --page-plane: #f9f9f7;             --page-plane-rgb: 249 249 247;
+  --surface: #fcfcfb;                --surface-rgb: 252 252 251;
+  --surface-raised: #ffffff;         --surface-raised-rgb: 255 255 255;
+  --text-primary: #0b0b0b;           --text-primary-rgb: 11 11 11;
+  --text-secondary: #52514e;         --text-secondary-rgb: 82 81 78;
+  /* Phase 14.3 accessibility audit: was #898781 (135 133 129) — an axe-core
+     scan (apps/web/e2e/accessibility.spec.ts) caught this failing WCAG 2.1
+     AA's 4.5:1 text-contrast requirement at the 12px/xs sizes this token is
+     actually used at throughout the app (PageHeader breadcrumbs, StatTile
+     helper text, Input/Textarea hint text) — as low as 3.4:1 against
+     --page-plane. Darkened to the same hue at a lower lightness; now ≥4.5:1
+     against every light-mode surface (--surface, --page-plane, white).
+     Dark mode's own --text-muted below is unchanged (still #898781, ~4.4-
+     5.4:1 against dark surfaces — not part of this scan's scope, see
+     docs/PHASE_14_3.md §7). */
+  --text-muted: #6b6964;             --text-muted-rgb: 107 105 100;
+  --border-hairline: rgba(11, 11, 11, 0.1);
+  --gridline: #e1e0d9;               --gridline-rgb: 225 224 217;
+
+  /* --- Status (fixed — never themed, never reused for chart series identity) --- */
+  --status-good: #0ca30c;            --status-good-rgb: 12 163 12;
+  --status-warning: #fab219;         --status-warning-rgb: 250 178 25;
+  --status-serious: #ec835a;         --status-serious-rgb: 236 131 90;
+  --status-critical: #d03b3b;        --status-critical-rgb: 208 59 59;
+
+  /* --- Categorical data series (fixed order — see DESIGN_SYSTEM.md S4) --- */
+  --series-1-blue: #2a78d6;          --series-1-blue-rgb: 42 120 214;
+  --series-2-orange: #eb6834;        --series-2-orange-rgb: 235 104 52;
+  --series-3-aqua: #1baf7a;          --series-3-aqua-rgb: 27 175 122;
+  --series-4-yellow: #eda100;        --series-4-yellow-rgb: 237 161 0;
+  --series-5-magenta: #e87ba4;       --series-5-magenta-rgb: 232 123 164;
+  --series-6-green: #008300;         --series-6-green-rgb: 0 131 0;
+  --series-7-violet: #4a3aa7;        --series-7-violet-rgb: 74 58 167;
+  --series-8-red: #e34948;           --series-8-red-rgb: 227 73 72;
+
+  /* --- Sequential (blue) ramp, for magnitude/heatmap encodings --- */
+  --sequential-100: #cde2fb;
+  --sequential-250: #86b6ef;
+  --sequential-400: #3987e5;
+  --sequential-550: #1c5cab;
+  --sequential-700: #0d366b;
+
+  /* --- Radius / elevation --- */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-pill: 999px;
+  --shadow-sm: 0 1px 2px rgba(11, 11, 11, 0.06);
+  --shadow-md: 0 4px 12px rgba(11, 11, 11, 0.08);
+  --shadow-lg: 0 12px 32px rgba(11, 11, 11, 0.16);
+}
+
+/*
+ * Dark mode is an explicit `data-theme="dark"` attribute on <html> (set by a
+ * theme toggle, persisted per user), not an automatic prefers-color-scheme
+ * flip — the dataviz skill requires dark mode to be a *selected* state with
+ * its own validated steps, not an automatic media-query switch, and this
+ * project follows that same discipline for product chrome, not just charts.
+ */
+[data-theme="dark"] {
+  color-scheme: dark;
+
+  --brand-primary-50: #0e2338;   --brand-primary-50-rgb: 14 35 56;
+  --brand-primary-100: #123049;  --brand-primary-100-rgb: 18 48 73;
+  --brand-primary-300: #2c567e;  --brand-primary-300-rgb: 44 86 126;
+  --brand-primary-500: #3987e5;  --brand-primary-500-rgb: 57 135 229;
+  --brand-primary-600: #4c80af;  --brand-primary-600-rgb: 76 128 175;
+  --brand-primary-700: #7fa6cb;  --brand-primary-700-rgb: 127 166 203;
+  --brand-primary-900: #eef3f8;  --brand-primary-900-rgb: 238 243 248;
+
+  --brand-accent-100: #3a2c10;   --brand-accent-100-rgb: 58 44 16;
+  --brand-accent-400: #dc9f30;   --brand-accent-400-rgb: 220 159 48;
+  --brand-accent-500: #e4b356;   --brand-accent-500-rgb: 228 179 86;
+  --brand-accent-700: #f5e1b8;   --brand-accent-700-rgb: 245 225 184;
+
+  --page-plane: #0d0d0d;        --page-plane-rgb: 13 13 13;
+  --surface: #1a1a19;           --surface-rgb: 26 26 25;
+  --surface-raised: #232322;    --surface-raised-rgb: 35 35 34;
+  --text-primary: #ffffff;      --text-primary-rgb: 255 255 255;
+  --text-secondary: #c3c2b7;    --text-secondary-rgb: 195 194 183;
+  --text-muted: #898781;        --text-muted-rgb: 137 135 129;
+  --border-hairline: rgba(255, 255, 255, 0.1);
+  --gridline: #2c2c2a;          --gridline-rgb: 44 44 42;
+
+  --status-good: #0ca30c;       --status-good-rgb: 12 163 12;
+  --status-warning: #fab219;    --status-warning-rgb: 250 178 25;
+  --status-serious: #ec835a;    --status-serious-rgb: 236 131 90;
+  --status-critical: #d03b3b;   --status-critical-rgb: 208 59 59;
+
+  --series-1-blue: #3987e5;     --series-1-blue-rgb: 57 135 229;
+  --series-2-orange: #d95926;   --series-2-orange-rgb: 217 89 38;
+  --series-3-aqua: #199e70;     --series-3-aqua-rgb: 25 158 112;
+  --series-4-yellow: #c98500;   --series-4-yellow-rgb: 201 133 0;
+  --series-5-magenta: #d55181;  --series-5-magenta-rgb: 213 81 129;
+  --series-6-green: #008300;    --series-6-green-rgb: 0 131 0;
+  --series-7-violet: #9085e9;   --series-7-violet-rgb: 144 133 233;
+  --series-8-red: #e66767;      --series-8-red-rgb: 230 103 103;
+}
+
+body {
+  background-color: var(--page-plane);
+  color: var(--text-primary);
+  font-variant-numeric: proportional-nums;
+}
+
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}

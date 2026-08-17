@@ -1,0 +1,11 @@
+{
+  "name": "@ngc/edge-functions",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Placeholder — implemented in a later phase (Mobile: Phase 12; Edge Functions: alongside the modules that need them). Exists now only so the pnpm workspace resolves cleanly.",
+  "scripts": {
+    "typecheck": "echo 'no source yet' && exit 0",
+    "lint": "echo 'no source yet' && exit 0",
+    "build": "echo 'no source yet' && exit 0"
+  }
+}

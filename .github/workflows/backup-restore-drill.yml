@@ -1,0 +1,83 @@
+name: Backup restore drill
+
+# Phase 15 (Deployment) — ARCHITECTURE.md §17's backup bullet: "backup
+# restoration tested periodically, not just configured." A backup nobody
+# has ever restored is a backup nobody actually knows works.
+#
+# Two genuinely different drills, both explained in docs/DEPLOYMENT.md's
+# "Backups & restore testing" section:
+#
+# 1. `schema-rebuild-drill` — ALWAYS runs, needs no secrets at all. Proves
+#    every migration under supabase/migrations still replays cleanly, in
+#    order, from nothing, into a disposable Postgres 16 container, then
+#    runs supabase/tests/smoke.sql (Phase 14.2) against it — i.e. not just
+#    "did every CREATE TABLE succeed" but "does RLS/every guard trigger
+#    still behave correctly" on the rebuilt schema. This is a real,
+#    automatable proxy for disaster-recovery-from-nothing, but it is NOT a
+#    test of restoring an actual Supabase-managed backup (no real data, no
+#    real backup artifact involved) — see job 2.
+#
+# 2. `restored-production-backup-smoke-test` — the real thing §17 actually
+#    asks for, and deliberately NOT something this workflow file performs
+#    end-to-end itself. Pulling/restoring a live production backup from
+#    public CI runners is its own security decision (production DB
+#    credentials reaching a shared runner, network egress to a live
+#    database) that this repo's operator should make deliberately once a
+#    real Supabase project and backup plan exist, not something a sandbox
+#    session should silently wire up. Instead: an operator restores a
+#    periodic (e.g. monthly) Supabase backup into a private, already-
+#    isolated instance out-of-band (Supabase's own point-in-time-recovery-
+#    to-a-new-project flow, or an equivalent private-runner process — see
+#    docs/DEPLOYMENT.md's runbook), then points
+#    `BACKUP_RESTORE_TEST_DATABASE_URL` at it. This job then ONLY runs
+#    supabase/tests/smoke.sql (never db-migrate.sh/db-seed.sh — a restored
+#    production copy already has its own schema and real data; this job
+#    must never write to it beyond smoke.sql's own small SMOKE_-prefixed
+#    throwaway fixture rows) against that already-restored copy, confirming
+#    the restore is not just "the files exist" but "RLS and every guard
+#    trigger this project depends on still actually work" — the same
+#    functional bar 14.2's smoke suite already holds CI's own ephemeral
+#    databases to.
+
+on:
+  schedule:
+    # Every Monday 04:00 UTC — "periodically," per §17, not "once at setup
+    # and never again." Adjust to match whatever cadence docs/DEPLOYMENT.md
+    # ultimately commits to once a real backup plan is chosen.
+    - cron: "0 4 * * 1"
+  workflow_dispatch: {}
+
+jobs:
+  schema-rebuild-drill:
+    name: "Rebuild schema from migrations + run smoke tests (no secrets required)"
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: ngc_erp
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Rebuild from nothing and run the Phase 14.2 smoke suite
+        env:
+          DATABASE_URL: postgres://postgres:postgres@localhost:5432/ngc_erp
+        run: bash scripts/db-smoke-test.sh
+
+  restored-production-backup-smoke-test:
+    name: "Verify an already-restored production backup (guarded — see this file's own header)"
+    if: ${{ secrets.BACKUP_RESTORE_TEST_DATABASE_URL != '' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run smoke assertions against the restored copy (no migrate/seed — real data already present)
+        env:
+          DATABASE_URL: ${{ secrets.BACKUP_RESTORE_TEST_DATABASE_URL }}
+        run: psql -v ON_ERROR_STOP=1 -q "$DATABASE_URL" -f supabase/tests/smoke.sql

@@ -1,0 +1,152 @@
+name: Deploy
+
+# Phase 15 (Deployment) — implements ARCHITECTURE.md §17's CD bullet
+# verbatim: "on merge to develop — deploy to staging + run migration
+# dry-run; on merge to main — run pending Supabase migrations, then deploy
+# web (Vercel) and trigger mobile OTA update (Expo EAS) where applicable;
+# native app-store builds triggered on tagged releases."
+#
+# This repo has no live Vercel/Supabase/Expo accounts connected yet (see
+# docs/DEPLOYMENT.md's "One-time manual setup" checklist) — every job below
+# is guarded with a job-level `if: ${{ secrets.X != '' }}` check so it shows
+# as cleanly SKIPPED (not a false green "success", not a red "failure") in
+# the Actions UI until the real secrets referenced in docs/DEPLOYMENT.md's
+# environment/secrets matrix are configured in this repo's/environment's
+# GitHub secrets. This is deliberate: a workflow that fakes success without
+# doing anything is worse than one that's honest about not having run.
+#
+# `migration-dry-run` is the one job that needs NO secrets at all — it
+# proves every migration under supabase/migrations still applies cleanly,
+# in order, against a disposable Postgres 16 container, mirroring ci.yml's
+# own migration-check job exactly — so it always genuinely runs, on every
+# push to develop, regardless of whether staging is provisioned yet.
+
+on:
+  push:
+    branches: [develop, main]
+    tags: ["v*"]
+
+jobs:
+  # --- develop -> staging -----------------------------------------------
+  migration-dry-run:
+    name: "develop: migration dry-run (always runs — no secrets required)"
+    if: github.ref == 'refs/heads/develop'
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: ngc_erp
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Apply every migration to a disposable database, in order
+        env:
+          DATABASE_URL: postgres://postgres:postgres@localhost:5432/ngc_erp
+        run: bash scripts/db-migrate.sh
+
+  deploy-staging:
+    name: "develop: deploy web to staging (Vercel)"
+    if: github.ref == 'refs/heads/develop' && vars.VERCEL_PROJECT_ID != '' && secrets.VERCEL_TOKEN != ''
+    runs-on: ubuntu-latest
+    environment: staging
+    env:
+      VERCEL_ORG_ID: ${{ vars.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+      # Vercel's own documented CI recipe for a prebuilt monorepo deploy:
+      # pull the project's environment config, build locally (so this job
+      # controls the exact build — the same turbo-filtered build ci.yml's
+      # own lint-typecheck-build job already verifies — rather than trusting
+      # Vercel's remote build step to rediscover the right workspace), then
+      # upload the prebuilt output. `--cwd apps/web` matches vercel.json's
+      # own assumption that the Vercel project's Root Directory is set to
+      # apps/web (docs/DEPLOYMENT.md's one-time manual setup step).
+      - run: npx vercel pull --yes --environment=preview --token="${{ secrets.VERCEL_TOKEN }}" --cwd apps/web
+      - run: npx vercel build --token="${{ secrets.VERCEL_TOKEN }}" --cwd apps/web
+      - run: npx vercel deploy --prebuilt --token="${{ secrets.VERCEL_TOKEN }}" --cwd apps/web
+
+  # --- main -> production -------------------------------------------------
+  run-production-migrations:
+    name: "main: apply pending Supabase migrations to production"
+    if: github.ref == 'refs/heads/main' && secrets.PRODUCTION_DATABASE_URL != ''
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+      - name: Apply pending migrations (idempotent — supabase/migrations only ever appends)
+        env:
+          DATABASE_URL: ${{ secrets.PRODUCTION_DATABASE_URL }}
+        run: bash scripts/db-migrate.sh
+
+  deploy-production:
+    name: "main: deploy web to production (Vercel)"
+    needs: run-production-migrations
+    # Runs whenever main deploys web, independent of whether the migration
+    # job above actually had a secret to run with (`always()` so a SKIPPED
+    # migration job — e.g. this repo today — doesn't block this job's own
+    # independent secret check below; a genuine migration FAILURE still
+    # blocks it via the explicit result check).
+    if: ${{ always() && github.ref == 'refs/heads/main' && needs.run-production-migrations.result != 'failure' && vars.VERCEL_PROJECT_ID != '' && secrets.VERCEL_TOKEN != '' }}
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      VERCEL_ORG_ID: ${{ vars.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+      - run: npx vercel pull --yes --environment=production --token="${{ secrets.VERCEL_TOKEN }}" --cwd apps/web
+      - run: npx vercel build --prod --token="${{ secrets.VERCEL_TOKEN }}" --cwd apps/web
+      - run: npx vercel deploy --prebuilt --prod --token="${{ secrets.VERCEL_TOKEN }}" --cwd apps/web
+
+  mobile-ota-update:
+    name: "main: trigger mobile OTA update (Expo EAS Update)"
+    needs: run-production-migrations
+    if: ${{ always() && github.ref == 'refs/heads/main' && needs.run-production-migrations.result != 'failure' && secrets.EXPO_TOKEN != '' }}
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: "pnpm"
+      - run: pnpm install --frozen-lockfile
+      - name: Publish an OTA update to the production channel
+        working-directory: apps/mobile
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: npx eas update --channel production --message "${{ github.event.head_commit.message }}" --non-interactive
+
+  # --- tagged release (v*) -> native app-store builds ---------------------
+  mobile-native-release:
+    name: "tag: native app-store build (EAS Build, all platforms)"
+    if: startsWith(github.ref, 'refs/tags/v') && secrets.EXPO_TOKEN != ''
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: "pnpm"
+      - run: pnpm install --frozen-lockfile
+      - name: Build native binaries for both platforms (production profile)
+        working-directory: apps/mobile
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: npx eas build --platform all --profile production --non-interactive --no-wait

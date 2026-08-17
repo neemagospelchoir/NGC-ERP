@@ -1,0 +1,19 @@
+{
+  "extends": "expo/tsconfig.base",
+  "compilerOptions": {
+    "strict": true,
+    "paths": {
+      "@/*": ["./src/*"]
+    },
+    // Explicit, not auto-detected — matches packages/services/tsconfig.json's
+    // own explicit `"types": ["node"]`. Needed because *.test.ts files run
+    // under `node:test` (via `tsx --test`), but expo/tsconfig.base's
+    // `moduleResolution: "bundler"` does not automatically pull in
+    // `@types/node`'s ambient `node:*` module declarations the way a
+    // typeRoots-walk would — confirmed by `tsc --noEmit --listFiles` NOT
+    // including any `@types/node` file until this was added.
+    "types": ["node"]
+  },
+  "include": ["**/*.ts", "**/*.tsx", ".expo/types/**/*.ts", "expo-env.d.ts"],
+  "exclude": ["node_modules"]
+}

@@ -1,0 +1,38 @@
+{
+  "expo": {
+    "name": "NGC ERP",
+    "slug": "ngc-erp-mobile",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "scheme": "ngcerp",
+    "userInterfaceStyle": "automatic",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "org.ngc.erp"
+    },
+    "android": {
+      "package": "org.ngc.erp"
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "static"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "NGC ERP uses the camera to scan an NGC member ID QR code."
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true
+    },
+    "extra": {
+      "eas": {
+        "projectId": "PENDING — set once this app is registered with EAS (docs/PHASE_12_1.md S7)"
+      }
+    }
+  }
+}

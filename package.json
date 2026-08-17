@@ -1,0 +1,42 @@
+{
+  "name": "ngc-erp",
+  "private": true,
+  "description": "Neema Gospel Choir (NGC) Institutional ERP Platform — monorepo root.",
+  "packageManager": "pnpm@9.0.0",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "turbo run build",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "db:migrate": "bash scripts/db-migrate.sh",
+    "db:seed:reference": "bash scripts/db-seed.sh reference",
+    "db:seed:demo": "bash scripts/db-seed.sh demo",
+    "db:reset": "bash scripts/db-reset.sh"
+  },
+  "devDependencies": {
+    "turbo": "^2.0.0"
+  },
+  "pnpm": {
+    "packageExtensions": {
+      "next@15.5.23": {
+        "dependencies": {
+          "@types/react": "18.3.31",
+          "@types/react-dom": "18.3.7"
+        }
+      },
+      "@react-pdf/renderer@4.6.0": {
+        "dependencies": {
+          "@types/react": "18.3.31"
+        }
+      }
+    },
+    "overrides": {
+      "uuid": "^11.1.1",
+      "postcss": "^8.5.23",
+      "sharp": "^0.35.0"
+    }
+  }
+}

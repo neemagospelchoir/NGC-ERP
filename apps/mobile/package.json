@@ -1,0 +1,44 @@
+{
+  "name": "@ngc/mobile",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Expo/React Native mobile client (ARCHITECTURE.md S9/S18). Shares business logic via @ngc/services and the Database type via @ngc/db with apps/web — this app owns only screens, navigation, and RN-specific plumbing (Supabase client w/ SecureStore-backed session storage, offline queue, mobile theme).",
+  "main": "expo-router/entry",
+  "scripts": {
+    "start": "expo start",
+    "android": "expo start --android",
+    "ios": "expo start --ios",
+    "web": "expo start --web",
+    "typecheck": "tsc --noEmit",
+    "lint": "tsc --noEmit",
+    "build": "expo export --platform android",
+    "test": "tsx --test 'src/**/*.test.ts'"
+  },
+  "dependencies": {
+    "@ngc/db": "workspace:*",
+    "@ngc/services": "workspace:*",
+    "@react-native-async-storage/async-storage": "^3.1.1",
+    "@react-native-community/netinfo": "12.0.1",
+    "@supabase/supabase-js": "^2.45.0",
+    "@tanstack/react-query": "^5.101.4",
+    "expo": "~57.0.12",
+    "expo-camera": "~57.0.3",
+    "expo-constants": "~57.0.10",
+    "expo-linking": "~57.0.5",
+    "expo-router": "~57.0.12",
+    "expo-secure-store": "~57.0.1",
+    "expo-status-bar": "~57.0.1",
+    "react": "19.2.3",
+    "react-native": "0.86.2",
+    "react-native-qrcode-svg": "6.3.15",
+    "react-native-safe-area-context": "~5.7.0",
+    "react-native-screens": "~4.26.0",
+    "react-native-svg": "15.15.4"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "@types/react": "~19.2.2",
+    "tsx": "^4.16.0",
+    "typescript": "~6.0.3"
+  }
+}
